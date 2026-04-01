@@ -7,6 +7,7 @@ import Home from "./Home";
 import SupportDashboard from "./SupportDashboard";
 import Tab3Options from "./Tab3Options";
 import TransferLiveForm from "./TransferLiveForm";
+import TransferPredict from "./TransferPredict";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/emergency" element={<EmergencyPage />} />
         <Route path="/tab3" element={<Tab3Options />} />
         <Route path="/transfer-live" element={<TransferLiveForm />} />
+        <Route path="/transfer-predict" element={<TransferPredict />} />
         <Route path="/auth/:context" element={<Authentication />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Activity,
   Clock3,
   HeartPulse,
   RefreshCcw,
+  Sparkles,
   Thermometer,
   WifiOff,
 } from "lucide-react";
 import GlassLayout from "./components/GlassLayout";
 
-type SensorPayload = {
+export type SensorPayload = {
   spo2: number;
   heart_rate: number;
   bp_sys: number;
@@ -29,6 +30,7 @@ type SensorPayload = {
 const SENSOR_URL = "/sensor-data";
 
 export default function TransferLiveForm() {
+  const navigate = useNavigate();
   const [data, setData] = useState<SensorPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,14 +185,28 @@ export default function TransferLiveForm() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void fetchSensorData()}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/20 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-500/30"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Refresh now
-          </button>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void fetchSensorData()}
+              className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/20 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-500/30"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Refresh now
+            </button>
+            <button
+              type="button"
+              disabled={!data || !!error}
+              onClick={() => {
+                if (!data) return;
+                navigate("/transfer-predict", { state: { sensorData: data } });
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-gradient-to-r from-cyan-500/35 to-blue-600/35 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-900/20 transition hover:border-cyan-200/40 hover:from-cyan-500/45 hover:to-blue-600/45 disabled:pointer-events-none disabled:opacity-45"
+            >
+              <Sparkles className="h-4 w-4" />
+              Predict
+            </button>
+          </div>
         </div>
       </div>
     </GlassLayout>
