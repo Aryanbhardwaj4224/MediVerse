@@ -4,7 +4,7 @@ import { Clock, Home, Pill, UserRound } from "lucide-react";
 import GlassLayout from "./components/GlassLayout";
 
 const CYCLE_MS = 24 * 60 * 60 * 1000;
-const STORAGE_KEY = "medishedular_state_v1";
+const STORAGE_KEY = "medishedular_state_v2";
 
 type MedRowDef = {
   id: string;
@@ -22,8 +22,7 @@ const ROW_DEFS: MedRowDef[] = [
 ];
 
 type RowPersist = {
-  checked: boolean;
-  doseLoggedAt: string | null; // ISO
+  doseLoggedAt: string | null; // ISO — checkbox follows this only
 };
 
 type PersistShape = {
@@ -31,11 +30,33 @@ type PersistShape = {
   rows: Record<string, RowPersist>;
 };
 
+function emptyRows(): Record<string, RowPersist> {
+  return Object.fromEntries(
+    ROW_DEFS.map((r) => [r.id, { doseLoggedAt: null }])
+  );
+}
+
+function normalizeLoaded(p: unknown): PersistShape | null {
+  if (!p || typeof p !== "object") return null;
+  const o = p as PersistShape;
+  if (typeof o.cycleStart !== "number" || !o.rows) return null;
+  const rows: Record<string, RowPersist> = {};
+  for (const def of ROW_DEFS) {
+    const raw = o.rows[def.id] as RowPersist & { checked?: boolean } | undefined;
+    const dose =
+      raw && typeof raw.doseLoggedAt === "string"
+        ? raw.doseLoggedAt
+        : null;
+    rows[def.id] = { doseLoggedAt: dose };
+  }
+  return { cycleStart: o.cycleStart, rows };
+}
+
 function loadPersist(): PersistShape | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as PersistShape;
+    return normalizeLoaded(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -85,9 +106,7 @@ export default function MediShedularDashboard() {
       if (elapsed >= CYCLE_MS) {
         const fresh: PersistShape = {
           cycleStart: Date.now(),
-          rows: Object.fromEntries(
-            ROW_DEFS.map((r) => [r.id, { checked: false, doseLoggedAt: null }])
-          ),
+          rows: emptyRows(),
         };
         savePersist(fresh);
         return fresh;
@@ -96,9 +115,7 @@ export default function MediShedularDashboard() {
     }
     const initial: PersistShape = {
       cycleStart: Date.now(),
-      rows: Object.fromEntries(
-        ROW_DEFS.map((r) => [r.id, { checked: false, doseLoggedAt: null }])
-      ),
+      rows: emptyRows(),
     };
     savePersist(initial);
     return initial;
@@ -112,9 +129,7 @@ export default function MediShedularDashboard() {
       if (Date.now() - prev.cycleStart < CYCLE_MS) return prev;
       const next: PersistShape = {
         cycleStart: Date.now(),
-        rows: Object.fromEntries(
-          ROW_DEFS.map((r) => [r.id, { checked: false, doseLoggedAt: null }])
-        ),
+        rows: emptyRows(),
       };
       savePersist(next);
       return next;
@@ -136,7 +151,7 @@ export default function MediShedularDashboard() {
 
   const setRow = (id: string, patch: Partial<RowPersist>) => {
     setPersist((prev) => {
-      const cur = prev.rows[id] ?? { checked: false, doseLoggedAt: null };
+      const cur = prev.rows[id] ?? { doseLoggedAt: null };
       const next: PersistShape = {
         ...prev,
         rows: { ...prev.rows, [id]: { ...cur, ...patch } },
@@ -146,17 +161,11 @@ export default function MediShedularDashboard() {
     });
   };
 
-  const onCheck = (id: string) => {
-    const r = rows[id];
-    if (!r || r.checked) return;
-    setRow(id, { checked: true });
-  };
-
   const onDoseCell = (id: string) => {
     const r = rows[id];
     if (!r) return;
     if (r.doseLoggedAt) return;
-    setRow(id, { doseLoggedAt: new Date().toISOString(), checked: true });
+    setRow(id, { doseLoggedAt: new Date().toISOString() });
   };
 
   function col4Label(
@@ -267,26 +276,26 @@ export default function MediShedularDashboard() {
                 </thead>
                 <tbody>
                   {ROW_DEFS.map((def) => {
-                    const st = rows[def.id] ?? {
-                      checked: false,
-                      doseLoggedAt: null,
-                    };
+                    const st = rows[def.id] ?? { doseLoggedAt: null };
                     const c4 = col4Label(def.schedule, st.doseLoggedAt, now);
-                    const checkboxDisabled = st.checked;
+                    const logged = !!st.doseLoggedAt;
 
                     return (
                       <tr key={def.id} className="align-middle">
                         <td className="pr-2 py-2">
                           <input
                             type="checkbox"
-                            checked={st.checked}
-                            disabled={checkboxDisabled}
-                            onChange={() => onCheck(def.id)}
+                            checked={logged}
+                            disabled={logged}
+                            onChange={() => {}}
+                            onClick={(e) => {
+                              if (!logged) e.preventDefault();
+                            }}
                             className="h-4 w-4 rounded border-cyan-400/50 bg-white/10 text-cyan-500 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                             title={
-                              st.checked
+                              logged
                                 ? "Locked until cycle reset (24h)"
-                                : "Mark dose prep done"
+                                : "Checks only after you tap “Tap to log dose time”"
                             }
                           />
                         </td>
@@ -324,21 +333,24 @@ export default function MediShedularDashboard() {
           </div>
         </div>
 
-        <div className="mt-8 flex w-full justify-end">
-          <footer
-            className={`${glass} inline-flex w-fit max-w-full flex-wrap items-center justify-end gap-2 px-5 py-4 text-right`}
-          >
-            <Clock className="h-5 w-5 shrink-0 text-cyan-300" />
-            <span className="text-sm font-medium text-cyan-100">
-              time until reset:{" "}
-              <span className="font-mono text-white tabular-nums">
-                {formatHms(timeUntilResetMs)}
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <div aria-hidden className="hidden lg:block" />
+          <div className="flex justify-start lg:pl-0">
+            <footer
+              className={`${glass} inline-flex w-fit max-w-full flex-wrap items-center gap-2 px-5 py-4 text-left`}
+            >
+              <Clock className="h-5 w-5 shrink-0 text-cyan-300" />
+              <span className="text-sm font-medium text-cyan-100">
+                time until reset:{" "}
+                <span className="font-mono text-white tabular-nums">
+                  {formatHms(timeUntilResetMs)}
+                </span>
               </span>
-            </span>
-            <span className="text-xs text-cyan-200/60">
-              (checkboxes &amp; logs clear when timer reaches zero)
-            </span>
-          </footer>
+              <span className="text-xs text-cyan-200/60">
+                (checkboxes &amp; logs clear when timer reaches zero)
+              </span>
+            </footer>
+          </div>
         </div>
       </div>
     </GlassLayout>
