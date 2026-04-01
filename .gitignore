@@ -38,4 +38,17 @@ pnpm-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
-node_modules
+
+# Vite
+*.local
+vite.config.ts.timestamp-*
+
+# Test / coverage
+coverage
+*.lcov
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional tooling
+.eslintcache

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import GlassLayout from "./components/GlassLayout";
 
 export type AuthContextType = "patient-history" | "patient-transfer";
@@ -18,19 +18,50 @@ type AuthenticationProps = {
 export default function Authentication({ contextOverride }: AuthenticationProps) {
   const { context: paramContext } = useParams<{ context: string }>();
   const context = contextOverride ?? paramContext;
+  const navigate = useNavigate();
 
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   if (!isAuthContext(context)) {
     return <Navigate to="/tab3" replace />;
   }
 
   const idLabel = context === "patient-history" ? "Doctor ID" : "Staff ID";
+  const requiresDemoCredentials = context === "patient-transfer";
+
+  const canSubmit = useMemo(() => {
+    return id.trim().length > 0 && password.trim().length > 0;
+  }, [id, password]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Wire to API / session when ready
+    setError(null);
+    setSuccess(null);
+
+    const idValue = id.trim();
+    const passValue = password.trim();
+
+    if (!idValue || !passValue) {
+      setError("Please enter both ID and password.");
+      return;
+    }
+
+    if (requiresDemoCredentials) {
+      if (idValue !== "admin_nurse" || passValue !== "smartbed2026") {
+        setError("Invalid demo credentials. Use the hint above.");
+        return;
+      }
+      setSuccess("Identity verified. Opening live sensor form…");
+      window.setTimeout(() => navigate("/transfer-live"), 400);
+      return;
+    }
+
+    // Patient History: demo-accept any non-empty credentials
+    setSuccess("Access granted. Redirecting…");
+    window.setTimeout(() => navigate("/tab3"), 600);
   }
 
   const inputClass =
@@ -53,6 +84,29 @@ export default function Authentication({ contextOverride }: AuthenticationProps)
           <h1 className="mb-8 text-center text-lg font-semibold tracking-tight text-white">
             {context === "patient-history" ? "Patient History" : "Patient Transfer"}
           </h1>
+
+          {context === "patient-transfer" && (
+            <div className="mb-6 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-3 text-xs text-cyan-50/90">
+              <p className="font-semibold text-cyan-200">Demo credentials</p>
+              <p className="mt-1 font-mono">
+                Staff ID: <span className="text-white">admin_nurse</span>
+                {"  "}Password: <span className="text-white">smartbed2026</span>
+              </p>
+            </div>
+          )}
+
+          {(error || success) && (
+            <div
+              className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
+                error
+                  ? "border-red-400/40 bg-red-500/10 text-red-100"
+                  : "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+              }`}
+              role={error ? "alert" : "status"}
+            >
+              {error ?? success}
+            </div>
+          )}
 
           <div className="space-y-5">
             <div>
@@ -95,6 +149,7 @@ export default function Authentication({ contextOverride }: AuthenticationProps)
 
           <button
             type="submit"
+            disabled={!canSubmit}
             className="mt-8 w-full rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-500/40 to-sky-500/35 py-3.5 text-sm font-semibold uppercase tracking-[0.15em] text-white shadow-[0_0_24px_rgba(34,211,238,0.25)] backdrop-blur-sm transition hover:border-cyan-200/50 hover:shadow-[0_0_32px_rgba(34,211,238,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           >
             Submit

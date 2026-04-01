@@ -39,27 +39,47 @@ export default function Home() {
           aria-label="Primary"
         >
           <ul className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
-            {["Tab 1", "Tab 2", "Tab 3", "Tab 4"].map((label) => (
-              <li key={label}>
-                {label === "Tab 3" ? (
-                  <Link
-                    to="/tab3"
-                    className="group relative block rounded-xl px-3 py-2 text-sm font-medium text-cyan-50/90 transition-colors duration-200 hover:text-white sm:px-4"
-                  >
-                    <span className="absolute inset-0 rounded-xl bg-white/0 transition-all duration-300 group-hover:bg-white/10 group-hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]" />
-                    <span className="relative">{label}</span>
-                  </Link>
-                ) : (
-                  <a
-                    href="#"
-                    className="group relative block rounded-xl px-3 py-2 text-sm font-medium text-cyan-50/90 transition-colors duration-200 hover:text-white sm:px-4"
-                  >
-                    <span className="absolute inset-0 rounded-xl bg-white/0 transition-all duration-300 group-hover:bg-white/10 group-hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]" />
-                    <span className="relative">{label}</span>
+            {(
+              [
+                { id: "system-guide", label: "System Guide", to: "/support" as const },
+                {
+                  id: "duty-roster",
+                  label: "Duty Roster",
+                  to: "/dashboard" as const,
+                },
+                {
+                  id: "clinical-access",
+                  label: "Clinical Access",
+                  to: "/tab3" as const,
+                },
+                { id: "tab4", label: "Tab 4", to: null },
+              ] as const
+            ).map((item) => {
+              const tabLinkClass =
+                "group relative block rounded-xl px-3 py-2 text-sm font-medium text-cyan-50/90 transition-colors duration-200 hover:text-white sm:px-4";
+              const tabInner = (
+                <>
+                  <span className="absolute inset-0 rounded-xl bg-white/0 transition-all duration-300 group-hover:bg-white/10 group-hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]" />
+                  <span className="relative">{item.label}</span>
+                </>
+              );
+              if (item.to) {
+                return (
+                  <li key={item.id}>
+                    <Link to={item.to} className={tabLinkClass}>
+                      {tabInner}
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={item.id}>
+                  <a href="#" className={tabLinkClass}>
+                    {tabInner}
                   </a>
-                )}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </nav>
       </header>
