@@ -80,6 +80,15 @@ state_lock = threading.Lock()
 current_patient_data: Dict[str, Any] = {
     "spo2": None,
     "heart_rate": None,
+    "bp_sys": None,
+    "bp_dia": None,
+    "resp_rate": None,
+    "temperature": None,
+    "glucose": None,
+    "map": None,
+    "cardiac_output": None,
+    "cardiac_index": None,
+    "cvp": None,
     "timestamp": None,
     "risk": None,
     "risk_score": None,
@@ -181,10 +190,20 @@ def polling_loop() -> None:
             resp.raise_for_status()
             payload = resp.json()
 
-            # Expected: {"spo2": int, "heart_rate": int, "timestamp": int}
+            # Sensor payload (new version) includes many vitals + ISO timestamp string.
             spo2 = int(payload.get("spo2"))
             heart_rate = int(payload.get("heart_rate"))
-            timestamp = int(payload.get("timestamp", now_ts))
+            timestamp = str(payload.get("timestamp", now_ts))
+
+            bp_sys = payload.get("bp_sys")
+            bp_dia = payload.get("bp_dia")
+            resp_rate = payload.get("resp_rate")
+            temperature = payload.get("temperature")
+            glucose = payload.get("glucose")
+            map_value = payload.get("map")
+            cardiac_output = payload.get("cardiac_output")
+            cardiac_index = payload.get("cardiac_index")
+            cvp = payload.get("cvp")
 
             risk_result = analyze_risk(spo2=spo2, heart_rate=heart_rate)
 
@@ -193,6 +212,15 @@ def polling_loop() -> None:
                     {
                         "spo2": spo2,
                         "heart_rate": heart_rate,
+                        "bp_sys": bp_sys,
+                        "bp_dia": bp_dia,
+                        "resp_rate": resp_rate,
+                        "temperature": temperature,
+                        "glucose": glucose,
+                        "map": map_value,
+                        "cardiac_output": cardiac_output,
+                        "cardiac_index": cardiac_index,
+                        "cvp": cvp,
                         "timestamp": timestamp,
                         **risk_result,
                         "source": {

@@ -1,18 +1,36 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Activity, Clock3, HeartPulse, RefreshCcw, WifiOff } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Activity,
+  Clock3,
+  HeartPulse,
+  RefreshCcw,
+  Sparkles,
+  Thermometer,
+  WifiOff,
+} from "lucide-react";
 import GlassLayout from "./components/GlassLayout";
 
-type SensorPayload = {
+export type SensorPayload = {
   spo2: number;
   heart_rate: number;
-  timestamp: number;
+  bp_sys: number;
+  bp_dia: number;
+  resp_rate: number;
+  temperature: number;
+  glucose: number;
+  map: number;
+  cardiac_output: number;
+  cardiac_index: number;
+  cvp: number;
+  timestamp: string;
 };
 
 // Use Vite dev proxy to avoid browser CORS blocks.
 const SENSOR_URL = "/sensor-data";
 
 export default function TransferLiveForm() {
+  const navigate = useNavigate();
   const [data, setData] = useState<SensorPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +60,56 @@ export default function TransferLiveForm() {
 
   const inputClass =
     "w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-sm text-cyan-50 shadow-inner backdrop-blur-md";
+
+  const metricRows: Array<{
+    label: string;
+    key: keyof SensorPayload;
+    format?: (v: SensorPayload[keyof SensorPayload]) => string;
+  }> = [
+    { label: "SpO2", key: "spo2", format: (v) => `${v as number} %` },
+    {
+      label: "Heart Rate",
+      key: "heart_rate",
+      format: (v) => `${v as number} bpm`,
+    },
+    {
+      label: "Blood Pressure (Sys)",
+      key: "bp_sys",
+      format: (v) => `${v as number} mmHg`,
+    },
+    {
+      label: "Blood Pressure (Dia)",
+      key: "bp_dia",
+      format: (v) => `${v as number} mmHg`,
+    },
+    {
+      label: "Respiratory Rate",
+      key: "resp_rate",
+      format: (v) => `${v as number} /min`,
+    },
+    {
+      label: "Temperature",
+      key: "temperature",
+      format: (v) => `${v as number} °C`,
+    },
+    {
+      label: "Glucose",
+      key: "glucose",
+      format: (v) => `${v as number} mg/dL`,
+    },
+    { label: "MAP", key: "map", format: (v) => `${v as number} mmHg` },
+    {
+      label: "Cardiac Output",
+      key: "cardiac_output",
+      format: (v) => `${v as number} L/min`,
+    },
+    {
+      label: "Cardiac Index",
+      key: "cardiac_index",
+      format: (v) => `${v as number} L/min/m²`,
+    },
+    { label: "CVP", key: "cvp", format: (v) => `${v as number} mmHg` },
+  ];
 
   return (
     <GlassLayout>
@@ -76,33 +144,38 @@ export default function TransferLiveForm() {
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-cyan-100/80">
-                <Activity className="h-3.5 w-3.5" />
-                SpO2
-              </label>
-              <input
-                readOnly
-                value={data?.spo2 ?? (loading ? "Fetching..." : "—")}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-cyan-100/80">
-                <HeartPulse className="h-3.5 w-3.5" />
-                Heart Rate
-              </label>
-              <input
-                readOnly
-                value={data?.heart_rate ?? (loading ? "Fetching..." : "—")}
-                className={inputClass}
-              />
-            </div>
-            <div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {metricRows.map((m, idx) => (
+              <div key={m.label}>
+                <label className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-cyan-100/80">
+                  {idx % 3 === 0 ? (
+                    <Activity className="h-3.5 w-3.5" />
+                  ) : idx % 3 === 1 ? (
+                    <HeartPulse className="h-3.5 w-3.5" />
+                  ) : (
+                    <Thermometer className="h-3.5 w-3.5" />
+                  )}
+                  {m.label}
+                </label>
+                <input
+                  readOnly
+                  value={
+                    data
+                      ? m.format
+                        ? m.format(data[m.key])
+                        : String(data[m.key])
+                      : loading
+                        ? "Fetching..."
+                        : "—"
+                  }
+                  className={inputClass}
+                />
+              </div>
+            ))}
+            <div className="sm:col-span-2">
               <label className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-cyan-100/80">
                 <Clock3 className="h-3.5 w-3.5" />
-                Timestamp
+                Timestamp (UTC)
               </label>
               <input
                 readOnly
@@ -112,14 +185,28 @@ export default function TransferLiveForm() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void fetchSensorData()}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/20 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-500/30"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Refresh now
-          </button>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void fetchSensorData()}
+              className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/20 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-500/30"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Refresh now
+            </button>
+            <button
+              type="button"
+              disabled={!data || !!error}
+              onClick={() => {
+                if (!data) return;
+                navigate("/transfer-predict", { state: { sensorData: data } });
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-gradient-to-r from-cyan-500/35 to-blue-600/35 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-900/20 transition hover:border-cyan-200/40 hover:from-cyan-500/45 hover:to-blue-600/45 disabled:pointer-events-none disabled:opacity-45"
+            >
+              <Sparkles className="h-4 w-4" />
+              Predict
+            </button>
+          </div>
         </div>
       </div>
     </GlassLayout>
