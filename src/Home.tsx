@@ -52,7 +52,11 @@ export default function Home() {
                   label: "Clinical Access",
                   to: "/tab3" as const,
                 },
-                { id: "tab4", label: "Tab 4", to: null },
+                {
+                  id: "medishedular",
+                  label: "MediSchedular",
+                  to: "/medishedular" as const,
+                },
               ] as const
             ).map((item) => {
               const tabLinkClass =
