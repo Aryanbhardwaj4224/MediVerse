@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "docx": "^9.6.1",
+    "face-api.js": "^0.22.2",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

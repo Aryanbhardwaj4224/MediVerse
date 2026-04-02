@@ -4,6 +4,10 @@ import GlassLayout from "./components/GlassLayout";
 
 export type AuthContextType = "patient-history" | "patient-transfer";
 
+/** Demo login for Patient History → Arvi Sharma report dashboard */
+export const PATIENT_HISTORY_DEMO_ID = "hist_doctor_arvi";
+export const PATIENT_HISTORY_DEMO_PASSWORD = "arvi_reports_2026";
+
 const validContexts: AuthContextType[] = ["patient-history", "patient-transfer"];
 
 function isAuthContext(v: string | undefined): v is AuthContextType {
@@ -30,7 +34,8 @@ export default function Authentication({ contextOverride }: AuthenticationProps)
   }
 
   const idLabel = context === "patient-history" ? "Doctor ID" : "Staff ID";
-  const requiresDemoCredentials = context === "patient-transfer";
+  const requiresTransferDemo = context === "patient-transfer";
+  const requiresHistoryDemo = context === "patient-history";
 
   const canSubmit = useMemo(() => {
     return id.trim().length > 0 && password.trim().length > 0;
@@ -49,7 +54,7 @@ export default function Authentication({ contextOverride }: AuthenticationProps)
       return;
     }
 
-    if (requiresDemoCredentials) {
+    if (requiresTransferDemo) {
       if (idValue !== "admin_nurse" || passValue !== "smartbed2026") {
         setError("Invalid demo credentials. Use the hint above.");
         return;
@@ -59,9 +64,18 @@ export default function Authentication({ contextOverride }: AuthenticationProps)
       return;
     }
 
-    // Patient History: demo-accept any non-empty credentials
-    setSuccess("Access granted. Redirecting…");
-    window.setTimeout(() => navigate("/tab3"), 600);
+    if (requiresHistoryDemo) {
+      if (
+        idValue !== PATIENT_HISTORY_DEMO_ID ||
+        passValue !== PATIENT_HISTORY_DEMO_PASSWORD
+      ) {
+        setError("Invalid demo credentials. Use the hint above.");
+        return;
+      }
+      setSuccess("Opening medical report history…");
+      window.setTimeout(() => navigate("/patient-history/reports"), 400);
+      return;
+    }
   }
 
   const inputClass =
@@ -91,6 +105,18 @@ export default function Authentication({ contextOverride }: AuthenticationProps)
               <p className="mt-1 font-mono">
                 Staff ID: <span className="text-white">admin_nurse</span>
                 {"  "}Password: <span className="text-white">smartbed2026</span>
+              </p>
+            </div>
+          )}
+
+          {context === "patient-history" && (
+            <div className="mb-6 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-3 text-xs text-cyan-50/90">
+              <p className="font-semibold text-cyan-200">Demo credentials</p>
+              <p className="mt-1 font-mono">
+                Doctor ID:{" "}
+                <span className="text-white">{PATIENT_HISTORY_DEMO_ID}</span>
+                {"  "}Password:{" "}
+                <span className="text-white">{PATIENT_HISTORY_DEMO_PASSWORD}</span>
               </p>
             </div>
           )}

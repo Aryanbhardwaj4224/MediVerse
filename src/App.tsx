@@ -8,6 +8,9 @@ import SupportDashboard from "./SupportDashboard";
 import Tab3Options from "./Tab3Options";
 import TransferLiveForm from "./TransferLiveForm";
 import TransferPredict from "./TransferPredict";
+import MediShedularAuth from "./MediShedularAuth";
+import MediShedularDashboard from "./MediShedularDashboard";
+import PatientMedicalReportHistory from "./PatientMedicalReportHistory";
 
 export default function App() {
   return (
@@ -21,6 +24,9 @@ export default function App() {
         <Route path="/tab3" element={<Tab3Options />} />
         <Route path="/transfer-live" element={<TransferLiveForm />} />
         <Route path="/transfer-predict" element={<TransferPredict />} />
+        <Route path="/medishedular" element={<MediShedularAuth />} />
+        <Route path="/medishedular/dashboard" element={<MediShedularDashboard />} />
+        <Route path="/patient-history/reports" element={<PatientMedicalReportHistory />} />
         <Route path="/auth/:context" element={<Authentication />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
