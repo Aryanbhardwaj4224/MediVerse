@@ -11,6 +11,7 @@ import TransferPredict from "./TransferPredict";
 import MediShedularAuth from "./MediShedularAuth";
 import MediShedularDashboard from "./MediShedularDashboard";
 import PatientMedicalReportHistory from "./PatientMedicalReportHistory";
+import VitalWeaveNexus from "./VitalWeaveNexus";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/support" element={<SupportDashboard />} />
         <Route path="/central" element={<CentralSystem />} />
         <Route path="/emergency" element={<EmergencyPage />} />
+        <Route path="/vitalweave-nexus" element={<VitalWeaveNexus />} />
         <Route path="/tab3" element={<Tab3Options />} />
         <Route path="/transfer-live" element={<TransferLiveForm />} />
         <Route path="/transfer-predict" element={<TransferPredict />} />
