@@ -2,7 +2,6 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -15,6 +14,7 @@ import {
   UserRound,
   WifiOff,
 } from "lucide-react";
+import emailjs from "@emailjs/browser";
 import GlassLayout from "./components/GlassLayout";
 import type { SensorPayload } from "./TransferLiveForm";
 
@@ -29,6 +29,37 @@ const ECG_VIDEO_SRC = `${import.meta.env.BASE_URL}videos/ecg-waves-dashboard.mp4
   /([^:]\/)\/+/g,
   "$1"
 );
+
+/** Proxy in vite.config.ts → Flask Smart Hospital Map (run hospital_map_app.py on :8000). */
+const HOSPITAL_MAP_IFRAME_SRC =
+  import.meta.env.VITE_HOSPITAL_MAP_URL ?? "/hospital-map/";
+
+/** From Drive audio.mp3 → public/audio/panic-alert.mp3 */
+const PANIC_AUDIO_SRC = `${import.meta.env.BASE_URL}audio/panic-alert.mp3`.replace(
+  /([^:]\/)\/+/g,
+  "$1"
+);
+
+const EMAILJS_SERVICE_ID = "service_zapmcrs";
+const EMAILJS_TEMPLATE_ID = "template_8vtyqdg";
+const EMAILJS_PUBLIC_KEY = "FPwtwFLpMtDmVwTTH";
+
+/**
+ * Sends panic notification via EmailJS. Ensure template fields exist in
+ * EmailJS (e.g. message, time, dashboard) or rename keys to match your template.
+ */
+export async function sendAlertEmail(): Promise<void> {
+  await emailjs.send(
+    EMAILJS_SERVICE_ID,
+    EMAILJS_TEMPLATE_ID,
+    {
+      message: "Emergency panic activated on VitalWeave Nexus.",
+      time: new Date().toLocaleString(),
+      dashboard: "VitalWeave Nexus",
+    },
+    { publicKey: EMAILJS_PUBLIC_KEY }
+  );
+}
 
 const PATIENT_PHOTO =
   "https://images.unsplash.com/photo-1594824476967-48c8b964273f?auto=format&fit=crop&w=480&q=80";
@@ -100,69 +131,6 @@ const NINE_METRICS: MetricCell[] = [
   },
 ];
 
-/** Graph for wayfinding (undirected). Shortest path Entrance → Trauma Bay. */
-const HALL_NODES: { id: string; label: string; x: number; y: number }[] = [
-  { id: "n0", label: "Entrance", x: 8, y: 82 },
-  { id: "n1", label: "North ward", x: 28, y: 38 },
-  { id: "n2", label: "ICU corridor", x: 28, y: 82 },
-  { id: "n3", label: "Core lab", x: 52, y: 60 },
-  { id: "n4", label: "Radiology", x: 76, y: 38 },
-  { id: "n5", label: "Trauma bay", x: 92, y: 82 },
-];
-
-const HALL_EDGES: { a: number; b: number; w: number }[] = [
-  { a: 0, b: 1, w: 3 },
-  { a: 0, b: 2, w: 4 },
-  { a: 1, b: 3, w: 2 },
-  { a: 2, b: 3, w: 3 },
-  { a: 3, b: 4, w: 2 },
-  { a: 4, b: 5, w: 2 },
-  { a: 2, b: 5, w: 6 },
-];
-
-function dijkstraPath(
-  n: number,
-  edges: { a: number; b: number; w: number }[],
-  start: number,
-  goal: number
-): number[] {
-  const adj: [number, number][][] = Array.from({ length: n }, () => []);
-  for (const e of edges) {
-    adj[e.a].push([e.b, e.w]);
-    adj[e.b].push([e.a, e.w]);
-  }
-  const dist = new Array(n).fill(Infinity);
-  const prev = new Array<number | null>(n).fill(null);
-  dist[start] = 0;
-  const seen = new Set<number>();
-  while (seen.size < n) {
-    let u = -1;
-    let best = Infinity;
-    for (let i = 0; i < n; i++) {
-      if (!seen.has(i) && dist[i] < best) {
-        best = dist[i];
-        u = i;
-      }
-    }
-    if (u < 0 || dist[u] === Infinity) break;
-    seen.add(u);
-    for (const [v, w] of adj[u]) {
-      const nd = dist[u] + w;
-      if (nd < dist[v]) {
-        dist[v] = nd;
-        prev[v] = u;
-      }
-    }
-  }
-  if (dist[goal] === Infinity) return [];
-  const path: number[] = [];
-  for (let cur: number | null = goal; cur !== null; cur = prev[cur]) {
-    path.push(cur);
-  }
-  path.reverse();
-  return path;
-}
-
 function IconFor({ kind }: { kind: MetricCell["icon"] }) {
   if (kind === "heart") return <HeartPulse className="h-3.5 w-3.5" />;
   if (kind === "thermo") return <Thermometer className="h-3.5 w-3.5" />;
@@ -172,10 +140,62 @@ function IconFor({ kind }: { kind: MetricCell["icon"] }) {
 export default function VitalWeaveNexus() {
   const [data, setData] = useState<SensorPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [panicSent, setPanicSent] = useState(false);
+  const [panicModalOpen, setPanicModalOpen] = useState(false);
   /** Height of 9-sensor block + ECG (used to size hospital map row) */
   const [sensorEcgStackPx, setSensorEcgStackPx] = useState(0);
   const sensorEcgStackRef = useRef<HTMLDivElement>(null);
+  const panicAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopPanicAudio = useCallback(() => {
+    const a = panicAudioRef.current;
+    if (a) {
+      a.pause();
+      a.currentTime = 0;
+      a.loop = false;
+    }
+  }, []);
+
+  const openPanicModal = useCallback(() => {
+    stopPanicAudio();
+    setPanicModalOpen(true);
+    void sendAlertEmail().catch((err) => {
+      console.error("EmailJS panic alert failed:", err);
+    });
+    queueMicrotask(() => {
+      const el = panicAudioRef.current;
+      if (!el) return;
+      el.currentTime = 0;
+      el.loop = true;
+      el.volume = 1;
+      void el.play().catch((err) => {
+        console.warn("Panic audio play failed:", err);
+      });
+    });
+  }, [stopPanicAudio]);
+
+  const closePanicModal = useCallback(() => {
+    stopPanicAudio();
+    setPanicModalOpen(false);
+  }, [stopPanicAudio]);
+
+  const sendPanicAlert = useCallback(() => {
+    void sendAlertEmail().catch((err) => {
+      console.error("EmailJS resend failed:", err);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => stopPanicAudio();
+  }, [stopPanicAudio]);
+
+  useEffect(() => {
+    if (!panicModalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [panicModalOpen]);
 
   const fetchSensorData = useCallback(async () => {
     try {
@@ -213,28 +233,16 @@ export default function VitalWeaveNexus() {
     };
   }, []);
 
-  const shortestPath = useMemo(
-    () => dijkstraPath(HALL_NODES.length, HALL_EDGES, 0, 5),
-    []
-  );
-
-  const pathEdgeKeys = useMemo(() => {
-    const s = new Set<string>();
-    for (let i = 0; i < shortestPath.length - 1; i++) {
-      const a = shortestPath[i];
-      const b = shortestPath[i + 1];
-      const k = a < b ? `${a}-${b}` : `${b}-${a}`;
-      s.add(k);
-    }
-    return s;
-  }, [shortestPath]);
-
-  function edgeKey(a: number, b: number) {
-    return a < b ? `${a}-${b}` : `${b}-${a}`;
-  }
-
   return (
     <GlassLayout>
+      <audio
+        ref={panicAudioRef}
+        src={PANIC_AUDIO_SRC}
+        preload="auto"
+        playsInline
+        className="pointer-events-none fixed left-0 top-0 h-0 w-0 opacity-0"
+        aria-hidden
+      />
       <div className="min-h-[100dvh] px-4 py-6 sm:px-6 lg:px-10">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -373,27 +381,16 @@ export default function VitalWeaveNexus() {
             <div className="flex flex-col items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setPanicSent(true);
-                  window.setTimeout(() => setPanicSent(false), 4000);
-                }}
+                onClick={openPanicModal}
                 className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full border-4 border-red-400/70 bg-gradient-to-b from-red-600/95 to-red-900 text-center text-[11px] font-bold uppercase leading-tight tracking-[0.18em] text-white shadow-[0_0_36px_rgba(239,68,68,0.55)] transition hover:border-red-300 hover:shadow-[0_0_52px_rgba(248,113,113,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:h-32 sm:w-32 sm:text-xs"
               >
                 Panic
               </button>
-              {panicSent && (
-                <p
-                  className="max-w-[12rem] text-center text-[10px] font-medium text-red-200/95 sm:text-xs"
-                  role="status"
-                >
-                  Alert simulated — support notified.
-                </p>
-              )}
             </div>
           </div>
 
           <div
-            className={`${glass} flex min-h-[200px] min-w-0 flex-col overflow-hidden p-3 sm:p-4 ${
+            className={`${glass} flex min-h-[200px] min-w-0 flex-col overflow-hidden p-2 sm:p-3 ${
               sensorEcgStackPx > 0 ? "lg:max-h-none" : ""
             }`}
             style={
@@ -402,78 +399,62 @@ export default function VitalWeaveNexus() {
                 : { minHeight: "min(40vh, 320px)" }
             }
           >
-            <p className="mb-1.5 shrink-0 text-xs font-semibold uppercase tracking-wider text-cyan-200/80">
-              Hospital routing — shortest path highlighted
+            <p className="mb-1 shrink-0 px-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-200/85 sm:text-xs">
+              Smart Hospital Map — run{" "}
+              <code className="text-cyan-100/90">python hospital_map_app.py</code>{" "}
+              (port 8000)
             </p>
-            <div className="min-h-0 flex-1 overflow-hidden rounded-xl">
-            <svg
-              viewBox="0 0 100 100"
-              className="h-full w-full bg-slate-950/60"
-              preserveAspectRatio="xMidYMid meet"
-              aria-label="Floor plan with shortest route to trauma bay in red"
-            >
-              <defs>
-                <pattern
-                  id="tile"
-                  width="8"
-                  height="8"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <path
-                    d="M0 8 L8 0 M-2 2 L2 -2 M6 10 L10 6"
-                    stroke="rgba(34,211,238,0.06)"
-                    strokeWidth="0.3"
-                  />
-                </pattern>
-              </defs>
-              <rect width="100" height="100" fill="url(#tile)" />
-              {/* corridors (neutral) */}
-              {HALL_EDGES.map((e) => {
-                const A = HALL_NODES[e.a];
-                const B = HALL_NODES[e.b];
-                const onShortest = pathEdgeKeys.has(edgeKey(e.a, e.b));
-                return (
-                  <line
-                    key={`${e.a}-${e.b}`}
-                    x1={A.x}
-                    y1={A.y}
-                    x2={B.x}
-                    y2={B.y}
-                    stroke={onShortest ? "rgba(248,113,113,0.95)" : "rgba(148,163,184,0.35)"}
-                    strokeWidth={onShortest ? 2.2 : 0.9}
-                    strokeLinecap="round"
-                  />
-                );
-              })}
-              {HALL_NODES.map((node, i) => (
-                <g key={node.id}>
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={shortestPath.includes(i) ? 3.2 : 2.4}
-                    fill={
-                      shortestPath.includes(i)
-                        ? "rgba(248,113,113,0.95)"
-                        : "rgba(34,211,238,0.85)"
-                    }
-                    stroke="rgba(15,23,42,0.9)"
-                    strokeWidth="0.4"
-                  />
-                  <text
-                    x={node.x}
-                    y={node.y - 5}
-                    textAnchor="middle"
-                    className="fill-[rgba(226,232,240,0.9)]"
-                    style={{ fontSize: "3.2px" }}
-                  >
-                    {node.label}
-                  </text>
-                </g>
-              ))}
-            </svg>
+            <div className="min-h-0 flex-1 overflow-hidden rounded-lg bg-[#2d2d2d]">
+              <iframe
+                title="Smart Hospital Map"
+                src={HOSPITAL_MAP_IFRAME_SRC}
+                className="h-full w-full min-h-[260px] border-0"
+                sandbox="allow-scripts allow-same-origin allow-forms"
+              />
             </div>
           </div>
         </section>
+        {panicModalOpen && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-red-600/45 p-4 backdrop-blur-md"
+            role="presentation"
+            aria-modal="true"
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-red-400/40 bg-slate-950/95 p-6 text-center shadow-[0_0_60px_rgba(220,38,38,0.45)] backdrop-blur-xl"
+              role="dialog"
+              aria-labelledby="panic-dialog-title"
+            >
+              <h2
+                id="panic-dialog-title"
+                className="text-lg font-bold uppercase tracking-wide text-red-200"
+              >
+                Emergency panic
+              </h2>
+              <p className="mt-2 text-sm text-cyan-100/80">
+                Alert email was sent. Audio is playing. Only{" "}
+                <strong>Stop</strong> silences sound and closes this dialog.
+                <strong> Send alert</strong> sends another email.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <button
+                  type="button"
+                  onClick={sendPanicAlert}
+                  className="rounded-xl border border-amber-400/50 bg-amber-600/25 px-5 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-600/35"
+                >
+                  Send alert
+                </button>
+                <button
+                  type="button"
+                  onClick={closePanicModal}
+                  className="rounded-xl border border-red-400/60 bg-red-700/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700/55"
+                >
+                  Stop
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </GlassLayout>
   );

@@ -11,6 +11,14 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/sensor-data/, "/data"),
       },
+      "/hospital-map": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+        rewrite: (path) => {
+          const p = path.replace(/^\/hospital-map/, "");
+          return p === "" ? "/" : p;
+        },
+      },
     },
   },
 });
